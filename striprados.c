@@ -144,6 +144,8 @@ out:
 int striprados_remove(rados_ioctx_t io_ctx, rados_striper_t striper, char *oid){
 	int ret;
 	int retry = 0;
+	time_t del_time;
+	char buffer[50];
 retry:
 	ret = rados_striper_remove(striper, oid);
 	if (ret == -EBUSY && force == 1 && retry == 0){
@@ -151,11 +153,12 @@ retry:
 		retry++;
 		if (ret == 0)
 			goto retry;
-	}
+	}	
+	strftime(buffer, 50, "%Y/%m/%d-%H:%M:%S", localtime(&del_time));
 	if (ret < 0) {
-		debug("%s delete failed errno: %d \n", oid, ret);
+		debug("[%s] %s delete failed errno: %d \n", buffer, oid, ret);
 	}else{
-		debug("%s deleted\n",oid);
+		debug("[%s] %s deleted\n", buffer, oid);
 	}
 	return ret;
 }
