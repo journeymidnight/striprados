@@ -174,16 +174,16 @@ int is_cached(const char * entry) {
 int do_ls(rados_ioctx_t ioctx) {
 	int ret;
 	const char *entry;
-	rados_list_ctx_t list_ctx;
+	rados_list_ctx_t *list_ctx;
 	char buf[128];
 	int length;
-	ret = rados_objects_list_open(ioctx, &list_ctx);
+	ret = rados_objects_list_open(ioctx, list_ctx);
 	if (ret < 0) {
 		debug("error reading list");
 		return -1;
 	}
 	debug("===striper objects list===\n");
-	while(!quit && rados_objects_list_next(list_ctx, &entry, NULL) != -ENOENT) {
+	while(!quit && rados_objects_list_next(*list_ctx, &entry, NULL) != -ENOENT) {
 		if (is_cached(entry) == 0)
 			continue;
 		if ((length = is_head_object(entry)) == 0)
@@ -703,7 +703,7 @@ void process_remove_ver_objs(void *arg){
 int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char *key, int force) {
 	int ret;
 	const char *entry;
-	rados_list_ctx_t list_ctx;
+	rados_list_ctx_t *list_ctx;
 	char buf[128];
 	int length;
 	uint64_t size;
@@ -713,13 +713,13 @@ int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char 
 	rm_args_t args = NULL;
 	threadpool tp;
 	tp = create_threadpool(50);
-	ret = rados_objects_list_open(ioctx, &list_ctx);
+	ret = rados_objects_list_open(ioctx, list_ctx);
 	if (ret < 0) {
 			debug("error reading list");
 			return -1;
 	}
 	debug("===start delete objects ===\n");
-	while(!quit && rados_objects_list_next(list_ctx, &entry, NULL) != -ENOENT) {
+	while(!quit && rados_objects_list_next(*list_ctx, &entry, NULL) != -ENOENT) {
 		if (is_cached(entry) == 0)
 			continue;
 		if ((length = is_head_object(entry)) == 0)
