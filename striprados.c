@@ -77,20 +77,37 @@ enum act {
  LIST ,
  DELETE,
  INFO,
- CLEAR
+ CLEAR,
+ TRUNC
 };
 
 
-#define BUFFSIZE (32 << 20) /* 32M */
-#define STRIPEUNIT (512 << 10) /* 512K */
-#define OBJECTSIZE (64 << 20) /* 64M */
-#define STRIPECOUNT 4 
+/* layout */
+unsigned int BUFFSIZE;
+unsigned int OBJECTSIZE;
+unsigned int STRIPECOUNT;
+unsigned int STRIPEUNIT;
 
 
 int quit = 0;
 remove_list rlist;
 int force = 0;
 int multi = 0;
+
+
+void init_layout(int ec) {
+	if (ec) {
+		BUFFSIZE = (2 << 20); /* 2M */
+		OBJECTSIZE = ( 5 << 20 ); /* 5M */
+		STRIPEUNIT = (512 << 10); /* 512K */
+		STRIPECOUNT = 1;
+	} else { /* normal replicat */
+		BUFFSIZE = (2 << 20); /* 32M */
+		OBJECTSIZE = ( 5 << 20 ); /* 64M */
+		STRIPEUNIT = (512 << 10); /* 512K */
+		STRIPECOUNT = 4;
+	}
+}
 
 
 int is_head_object(const char * entry) {
@@ -310,13 +327,20 @@ void quit_handler(int i)
 	quit = 1;
 }
 
+
+int do_trunc(rados_striper_t striper, rados_ioctx_t ioctx, const char *key, int offset){
+	debug("truncate file:%s at %d\n", key, offset);
+	if (offset < 0)
+		return -1;
+	return rados_striper_trunc(striper, key, offset);
+}
+
 /* aio */
-int do_put2(rados_striper_t striper, const char *key, const char *filename, uint16_t concurrent, int overwrite) {
+int do_put2(rados_striper_t striper, const char *key, const char *filename, uint16_t concurrent, int offset) {
 	
 	int ret = 0;
 	int i;
 	uint64_t count = 0;
-	uint64_t offset = 0;
 	char *buf = NULL;
 	rados_completion_t my_completion;
 	#define COMPLETION_LIST_SIZE 256
@@ -347,9 +371,6 @@ int do_put2(rados_striper_t striper, const char *key, const char *filename, uint
 		goto checkfilefail;
 	}
 
-	if (overwrite == 1)
-		rados_striper_trunc(striper, key, 0);
-
 	count = BUFFSIZE;
 	while (count != 0 && !quit) {
 
@@ -362,7 +383,7 @@ int do_put2(rados_striper_t striper, const char *key, const char *filename, uint
 			continue;
 		}
 
-		count = read(fd, buf, BUFFSIZE);
+		count = pread(fd, buf, BUFFSIZE, offset);
 
 		if (count < 0) {
 			put_buffer_back(&bm, buf);
@@ -771,9 +792,16 @@ int main(int argc, const char **argv)
 	rlist.count = 0;
 	time_t startT, endT;
 	double totalT;
+	int ec = 0;
+
+	int offset = 0;
+
 	startT = time(NULL);
-	while ((opt = getopt(argc, (char* const *) argv, "d:p:u:g:mflr:i:e:")) != -1) {
+	while ((opt = getopt(argc, (char* const *) argv, "jd:p:u:g:mflr:i:e:t:o:")) != -1) {
 		switch (opt) {
+			case 'j':
+				ec = 1;
+				break;
 			case 'd':
 				action = DELETE;
 				to_delete_file_list = optarg;
@@ -807,8 +835,15 @@ int main(int argc, const char **argv)
 				action = CLEAR;
 				key = optarg;
 				break;
+			case 't':
+				/* format ./striprados -p video -t oid -o 100 */
+				action = TRUNC;
+				key = optarg;
 			case 'm':
 				multi = 1;
+				break;
+			case 'o':
+				offset = atoi(optarg);
 				break;
 			default:
 				usage();
@@ -833,10 +868,15 @@ int main(int argc, const char **argv)
 		/* pass */
 	} else if (action == CLEAR || key != NULL) {
 		/* pass */
+	} else if (action == TRUNC || key != NULL || offset >= 0) {
+		/* pass */
 	} else {
 			usage();
 			return EXIT_FAILURE;
 	}
+
+
+	init_layout(ec);
 
 	rados_ioctx_t io_ctx = NULL;
 	rados_striper_t striper = NULL;
@@ -900,7 +940,7 @@ int main(int argc, const char **argv)
 			ret = do_ls(io_ctx);
 			break;
 		case UPLOAD:
-			ret = do_put2(striper, key, filename, 4, 0);
+			ret = do_put2(striper, key, filename, 2, offset);
 			break;
 		case DONWLOAD:
 			ret = do_get(io_ctx, striper, key, filename);
@@ -913,6 +953,9 @@ int main(int argc, const char **argv)
 			break;
 		case CLEAR:
 			ret = do_clear_old_files(striper, io_ctx, key, force);
+			break;
+		case TRUNC:
+			ret = do_trunc(striper, io_ctx, key, offset);
 			break;
 		default:
 			output("fail\n");
