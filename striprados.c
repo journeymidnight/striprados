@@ -162,7 +162,7 @@ int striprados_remove(rados_ioctx_t io_ctx, rados_striper_t striper, char *oid){
 	int ret;
 	int retry = 0;
 	time_t del_time;
-	char buffer[50];
+	char buffer[80];
 retry:
 	ret = rados_striper_remove(striper, oid);
 	if (ret == -EBUSY && force == 1 && retry == 0){
@@ -170,8 +170,10 @@ retry:
 		retry++;
 		if (ret == 0)
 			goto retry;
-	}	
-	strftime(buffer, 50, "%Y/%m/%d-%H:%M:%S", localtime(&del_time));
+	}
+	time(&del_time);
+	struct tm* ptr = localtime(&del_time);
+	strftime(buffer, sizeof(buffer), "%Y/%m/%d-%H:%M:%S", ptr);
 	if (ret < 0) {
 		debug("[%s] %s delete failed errno: %d \n", buffer, oid, ret);
 	}else{
@@ -725,15 +727,13 @@ int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char 
 	int ret;
 	const char *entry;
 	rados_list_ctx_t list_ctx;
-	char buf[128];
+	char buf[1024];
 	int length;
 	uint64_t size;
 	time_t mod_time;
 	time_t now_time;
 	int date_of_expiry = atoi(key)*24*60*60;
 	rm_args_t args = NULL;
-	threadpool tp;
-	tp = create_threadpool(50);
 	ret = rados_objects_list_open(ioctx, &list_ctx);
 	if (ret < 0) {
 			debug("error reading list");
@@ -756,15 +756,7 @@ int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char 
 		}
 		time(&now_time);
 		if ((now_time - mod_time) > date_of_expiry){
-			if (multi){
-				add_obj_to_list(&rlist, buf);
-				args = (rm_args_t)malloc(sizeof(rm_args));
-				args->io_ctx = ioctx;
-				args->striper = striper;
-				dispatch_threadpool(tp, process_remove_ver_objs, (void *)args);
-			}else{
-				striprados_remove(ioctx, striper, buf);
-			}
+			striprados_remove(ioctx, striper, buf);
 		}
 	}
 	
@@ -772,7 +764,6 @@ int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char 
 	while(!list_empty(&rlist.job_list)){
 		sleep(5);
 	}
-	destroy_threadpool(tp);
 	debug("===all objects deleted complete ===\n");
 	return 0;
 }
