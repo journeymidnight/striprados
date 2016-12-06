@@ -338,7 +338,7 @@ int do_trunc(rados_striper_t striper, rados_ioctx_t ioctx, const char *key, int 
 }
 
 /* aio */
-int do_put2(rados_striper_t striper, const char *key, const char *filename, uint16_t concurrent, int offset) {
+int do_put2(rados_striper_t striper, const char *key, const char *filename, uint16_t concurrent, uint64_t offset) {
 	
 	int ret = 0;
 	int i;
@@ -416,6 +416,8 @@ int do_put2(rados_striper_t striper, const char *key, const char *filename, uint
 		rados_striper_aio_write(striper, key, my_completion, buf, count, offset);
 
 		offset += count;
+		
+		
 		debug("%lu%%\r", offset * 100 / sb.st_size);
 		fflush(stderr);
 	}
