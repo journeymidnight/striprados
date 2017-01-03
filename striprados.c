@@ -854,13 +854,13 @@ int main(int argc, const char **argv)
 	} else if ((action == LIST || action == DELETE || action == INFO ) && pool_name) {
 		/* pass */
 		
-	} else if (action == DELETE || to_delete_file_list != NULL) {
+	} else if (action == DELETE && to_delete_file_list != NULL && pool_name) {
 		/* pass */
-	} else if (action == DELETE || key != NULL) {
+	} else if (action == DELETE &&  key != NULL && pool_name ) {
 		/* pass */
-	} else if (action == CLEAR || key != NULL) {
+	} else if (action == CLEAR && key != NULL && pool_name) {
 		/* pass */
-	} else if (action == TRUNC || key != NULL || offset >= 0) {
+	} else if (action == TRUNC && key != NULL && offset >= 0 && pool_name) {
 		/* pass */
 	} else {
 			usage();
