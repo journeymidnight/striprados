@@ -735,7 +735,6 @@ int do_clear_old_files(rados_striper_t striper, rados_ioctx_t ioctx, const char 
 	time_t mod_time;
 	time_t now_time;
 	int date_of_expiry = atoi(key)*24*60*60;
-	rm_args_t args = NULL;
 	ret = rados_objects_list_open(ioctx, &list_ctx);
 	if (ret < 0) {
 			debug("error reading list");
